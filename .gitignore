@@ -12,7 +12,6 @@
 
 # Package Files #
 *.jar
-*.war
 *.nar
 *.ear
 *.zip
@@ -42,6 +41,9 @@ buildNumber.properties
 
 # JDT-specific (Eclipse Java Development Tools)
 .classpath
+
+# Env variable
+.env
 
 # Generated
 target/

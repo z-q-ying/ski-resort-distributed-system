@@ -10,8 +10,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 @Builder
 @Getter
-public class WorkerParam {
+public class PostWorkerParam {
   private final BlockingQueue<Event> eventBlockingQueue;
+  private final BlockingQueue<EventLog> logBlockingQueue;
   private final CountDownLatch countDownLatch;
   private final AtomicInteger successfulRequests;
   private final AtomicInteger failedRequests;

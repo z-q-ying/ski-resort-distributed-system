@@ -33,5 +33,8 @@ public class Constants {
   public static final int MIN_TIME = 1;
   public static final int MAX_TIME = 360;
 
+  // Csv file path
+  public static final String CSV_PATH = "./src/main/resources/output.csv";
+
   private Constants() {}
 }

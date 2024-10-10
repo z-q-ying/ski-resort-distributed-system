@@ -1,4 +1,4 @@
-package ski.resort.distributed.system;
+package ski.resort.distributed.system.runnables;
 
 import io.swagger.client.model.LiftRide;
 import ski.resort.distributed.system.models.Event;

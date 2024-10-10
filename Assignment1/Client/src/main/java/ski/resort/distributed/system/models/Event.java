@@ -3,15 +3,17 @@ package ski.resort.distributed.system.models;
 import io.swagger.client.model.LiftRide;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.Setter;
 
 @Builder
 @Getter
 public class Event {
-  private Integer skierID;
-  private Integer resortID;
-  private Integer liftID;
-  private String seasonId;
-  private String dayId;
-  private Integer time;
-  private LiftRide liftRide;
+  private final Integer skierID;
+  private final Integer resortID;
+  private final Integer liftID;
+  private final String seasonId;
+  private final String dayId;
+  private final Integer time;
+  private final LiftRide liftRide;
+  @Setter private Integer responseCode;
 }

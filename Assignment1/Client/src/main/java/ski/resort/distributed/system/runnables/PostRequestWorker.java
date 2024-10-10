@@ -1,22 +1,24 @@
-package ski.resort.distributed.system;
+package ski.resort.distributed.system.runnables;
 
 import io.swagger.client.ApiException;
 import io.swagger.client.ApiResponse;
 import io.swagger.client.api.SkiersApi;
 import ski.resort.distributed.system.models.Event;
-import ski.resort.distributed.system.models.WorkerParam;
+import ski.resort.distributed.system.models.EventLog;
+import ski.resort.distributed.system.models.PostWorkerParam;
 
 import static ski.resort.distributed.system.constants.Constants.HTTP_CLIENT_ERROR;
 import static ski.resort.distributed.system.constants.Constants.HTTP_CREATED;
 import static ski.resort.distributed.system.constants.Constants.HTTP_OK;
 import static ski.resort.distributed.system.constants.Constants.HTTP_SERVER_ERROR;
 import static ski.resort.distributed.system.constants.Constants.MAX_RETRIES;
+import static ski.resort.distributed.system.constants.UserConfig.RECORD_POSTS_IN_CSV;
 
 public class PostRequestWorker implements Runnable {
 
-  private final WorkerParam params;
+  private final PostWorkerParam params;
 
-  public PostRequestWorker(final WorkerParam params) {
+  public PostRequestWorker(final PostWorkerParam params) {
     this.params = params;
   }
 
@@ -25,13 +27,39 @@ public class PostRequestWorker implements Runnable {
     try {
       for (int i = 0; i < params.getNumOfRequests(); i++) {
         Event event = params.getEventBlockingQueue().take();
-        processRequest(event);
+        if (RECORD_POSTS_IN_CSV) {
+          final long startTime = System.currentTimeMillis();
+          processRequest(event);
+          final long endTime = System.currentTimeMillis();
+          recordRequestSent("POST", event.getResponseCode(), startTime, endTime);
+        } else {
+          processRequest(event);
+        }
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       System.err.println("Thread interrupted. Thread ID: " + Thread.currentThread().getId());
     } finally {
       params.getCountDownLatch().countDown();
+    }
+  }
+
+  private void recordRequestSent(
+      final String type, final Integer responseCode, final long startTime, final long endTime) {
+    try {
+      params
+          .getLogBlockingQueue()
+          .put(
+              EventLog.builder()
+                  .type(type)
+                  .responseCode(responseCode)
+                  .startTime(startTime)
+                  .endTime(endTime)
+                  .build());
+    } catch (InterruptedException e) {
+      System.err.println(
+          "Thread interrupted while waiting to put event log. Thread ID: "
+              + Thread.currentThread().getId());
     }
   }
 
@@ -63,12 +91,15 @@ public class PostRequestWorker implements Runnable {
 
   private ApiResponse<Void> sendPostRequest(final Event event) throws ApiException {
     final SkiersApi skiersApi = params.getSkiersApi();
-    return skiersApi.writeNewLiftRideWithHttpInfo(
-        event.getLiftRide(),
-        event.getResortID(),
-        event.getSeasonId(),
-        event.getDayId(),
-        event.getSkierID());
+    final ApiResponse<Void> response =
+        skiersApi.writeNewLiftRideWithHttpInfo(
+            event.getLiftRide(),
+            event.getResortID(),
+            event.getSeasonId(),
+            event.getDayId(),
+            event.getSkierID());
+    if (response != null) event.setResponseCode(response.getStatusCode());
+    return response;
   }
 
   private boolean handleResponse(ApiResponse<Void> response) {
