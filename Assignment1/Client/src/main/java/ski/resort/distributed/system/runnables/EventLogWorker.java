@@ -9,6 +9,10 @@ import java.io.IOException;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * A runnable that retrieves EventLog instances from a blocking queue and writes them to a CSV file
+ * if logging is enabled.
+ */
 public class EventLogWorker implements Runnable {
   private final String filePath;
   private final BlockingQueue<EventLog> logBlockingQueue;

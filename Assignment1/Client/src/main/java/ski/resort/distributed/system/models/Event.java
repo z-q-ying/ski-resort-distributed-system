@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 
+/** Represents an event holding data that will be processed or sent in HTTP requests. */
 @Builder
 @Getter
 public class Event {

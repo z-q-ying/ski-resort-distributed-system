@@ -1,5 +1,9 @@
 package ski.resort.distributed.system.constants;
 
+/**
+ * Defines constants used throughout the client project, ensuring consistent configuration values
+ * across various components.
+ */
 public class Constants {
 
   // HTTP Status

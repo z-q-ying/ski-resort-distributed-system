@@ -3,6 +3,7 @@ package ski.resort.distributed.system.models;
 import lombok.Builder;
 import lombok.Getter;
 
+/** Encapsulates event log data, which is to be written to a CSV file. */
 @Builder
 @Getter
 public class EventLog {

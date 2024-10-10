@@ -8,6 +8,10 @@ import java.util.concurrent.BlockingQueue;
 
 import static ski.resort.distributed.system.constants.Constants.*;
 
+/**
+ * A runnable tasked with generating random `Event` instances and putting them into a blocking queue
+ * for further processing.
+ */
 public class EventGenerator implements Runnable {
 
   private static final Random random = new Random();
@@ -15,7 +19,7 @@ public class EventGenerator implements Runnable {
   private final Integer eventCount;
   private final BlockingQueue<Event> eventBlockingQueue;
 
-  public EventGenerator(Integer eventCount, BlockingQueue<Event> eventBlockingQueue) {
+  public EventGenerator(final Integer eventCount, final BlockingQueue<Event> eventBlockingQueue) {
     this.eventCount = eventCount;
     this.eventBlockingQueue = eventBlockingQueue;
   }

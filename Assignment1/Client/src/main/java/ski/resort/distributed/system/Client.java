@@ -25,6 +25,10 @@ import static ski.resort.distributed.system.constants.UserConfig.BASE_PATH;
 import static ski.resort.distributed.system.constants.UserConfig.RECORD_POSTS_IN_CSV;
 import static ski.resort.distributed.system.constants.UserConfig.USE_REMOTE;
 
+/**
+ * Orchestrates the creation of blocking queues and the execution of tasks by passing these queues
+ * into the relevant runnables and submitting tasks via ExecutorService.
+ */
 public class Client {
 
   private static final AtomicInteger successfulRequests = new AtomicInteger(0);
@@ -63,7 +67,7 @@ public class Client {
       printStat(start2, end2, successCnt2, failedCnt2);
 
       // Summary
-      System.out.println("========== Summary ==========");
+      System.out.println("================ Summary ================");
       printStat(start1, end2, successCnt1 + successCnt2, failedCnt1 + failedCnt2);
     } catch (InterruptedException e) {
       throw new RuntimeException(e);
@@ -71,7 +75,7 @@ public class Client {
   }
 
   private static void doPhaseOne() throws InterruptedException {
-    System.out.println("========== Phase 1 ==========");
+    System.out.println("================ Phase 1 ================");
     printConfigMsg(INITIAL_THREAD_COUNT, INITIAL_POSTS_PER_THREAD);
 
     final CountDownLatch initialLatch = new CountDownLatch(INITIAL_THREAD_COUNT);
@@ -89,9 +93,9 @@ public class Client {
   }
 
   private static void doPhaseTwo() throws InterruptedException {
-    System.out.println("========== Phase 2 ==========");
+    System.out.println("================ Phase 2 ================");
     int remainingPosts = TOTAL_POSTS - INITIAL_POSTS_PER_THREAD * INITIAL_THREAD_COUNT;
-    final int threadCount = (new Random().nextInt(3, 25)) * 10;
+    final int threadCount = (new Random().nextInt(3, 25)) * 10; // Change to fix number if needed
     final int postsPerThread = (int) Math.ceil((float) remainingPosts / threadCount);
     printConfigMsg(threadCount, postsPerThread);
 
@@ -142,22 +146,22 @@ public class Client {
   }
 
   private static void printConfigMsg(final int threadCount, final int postsPerThread) {
-    System.out.printf("Thread count:  %4d threads%n", threadCount);
-    System.out.printf("Posts/thread:  %4d posts%n", postsPerThread);
+    System.out.printf("Thread count:            %4d threads%n", threadCount);
+    System.out.printf("Posts/thread:          %6d posts%n\n", postsPerThread);
   }
 
   private static void printStat(
       final long startTime, final long endTime, final int successReq, final int failedReq) {
     StringBuilder stringBuilder = new StringBuilder();
-    stringBuilder.append(String.format("\n%-18s %10d\n", "Total:", successReq + failedReq));
+    stringBuilder.append(String.format("%-18s %10d\n", "Post count:", successReq + failedReq));
     stringBuilder.append(String.format("%-18s %10d posts\n", "Success:", successReq));
     stringBuilder.append(String.format("%-18s %10d posts\n", "Failed:", failedReq));
 
     final long totalRunTime = endTime - startTime;
     final double throughput = (double) (successReq + failedReq) / (totalRunTime / 1000.0);
-    stringBuilder.append(String.format("%-18s %10d ms\n", "Total run time:", totalRunTime));
-    stringBuilder.append(
-        String.format("%-18s %10.0f req/second\n", "Total throughput:", throughput));
+
+    stringBuilder.append(String.format("%-18s %10d ms\n", "Run time:", totalRunTime));
+    stringBuilder.append(String.format("%-18s %10.0f req/second\n", "Throughput:", throughput));
     System.out.println(stringBuilder);
   }
 }

@@ -2,6 +2,10 @@ package ski.resort.distributed.system.constants;
 
 import io.github.cdimascio.dotenv.Dotenv;
 
+/**
+ * Stores user configuration options such as server mode (local or remote) and logging preferences
+ * (whether to log individual events).
+ */
 public class UserConfig {
 
   /** 1. Base path or URL for API requests */

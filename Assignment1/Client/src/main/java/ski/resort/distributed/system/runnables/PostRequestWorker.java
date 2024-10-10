@@ -14,6 +14,11 @@ import static ski.resort.distributed.system.constants.Constants.HTTP_SERVER_ERRO
 import static ski.resort.distributed.system.constants.Constants.MAX_RETRIES;
 import static ski.resort.distributed.system.constants.UserConfig.RECORD_POSTS_IN_CSV;
 
+/**
+ * A runnable responsible for retrieving Event instances from the queue and generating/sending HTTP
+ * requests via the Swagger agent. If logging is enabled, it also generates EventLog instances and
+ * put them in the log queue for further processing.
+ */
 public class PostRequestWorker implements Runnable {
 
   private final PostWorkerParam params;
