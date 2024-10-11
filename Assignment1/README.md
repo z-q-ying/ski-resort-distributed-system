@@ -35,7 +35,7 @@ public class UserConfig {
 
 **2. Client 1 vs Client 2**
 - To run as **Client 1** without CSV logging, set `RECORD_POSTS_IN_CSV` to `false`.
-- To run as **Client 1** with CSV logging being enabled, set `RECORD_POSTS_IN_CSV` to `true`.
+- To run as **Client 2** with CSV logging being enabled, set `RECORD_POSTS_IN_CSV` to `true`.
 
 **3. Number of Threads in Phase 2**
 - Currently, the number of threads in phase 2 is set to a random value in `doPhaseTwo` method in `Client.java`.
