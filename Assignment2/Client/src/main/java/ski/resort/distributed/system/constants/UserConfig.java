@@ -18,7 +18,7 @@ public class UserConfig {
   private static final String REMOTE_BASE_PATH = "http://" + HOST_IP + ":8080/Server_war";
 
   // (c) Toggle between local and remote base path: true for remote, false for local
-  public static final boolean USE_REMOTE = false;
+  public static final boolean USE_REMOTE = true;
   public static final String BASE_PATH = USE_REMOTE ? REMOTE_BASE_PATH : LOCAL_BASE_PATH;
 
   /** 2. Set number of posting threads */
