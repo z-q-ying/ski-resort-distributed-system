@@ -1,6 +1,6 @@
 # How to Run the Client
 
-On top of the instructions shown in Lab 1 (Set up EC2 and Tomcat), Lab 2 (Set up and run Servlet on Tomcat hosted by EC2), and Lab 3 (Set up client), users can find all the configuration parameters that need to be updated in `ski.resort.distributed.system.constants.UserConfig`, as detailed below.
+Similar to Assignment 1, users can find all the configuration parameters that need to be updated in `ski.resort.distributed.system.constants.UserConfig`, as detailed below.
 
 ```java
 package ski.resort.distributed.system.constants;
@@ -9,18 +9,9 @@ import io.github.cdimascio.dotenv.Dotenv;
 
 public class UserConfig {
 
-  /** 1. Base path or URL for API requests */
-
-  // (a) Define the local base path
-  private static final String LOCAL_BASE_PATH = "http://localhost:8080/Server_war_exploded";
-
-  // (b) Define the remote base path with the correct HOST_IP
+  /** 1. URL for API requests */
   private static final String HOST_IP = Dotenv.load().get("MY_EC2_IP");
-  private static final String REMOTE_BASE_PATH = "http://" + HOST_IP + ":8080/Server_war";
-
-  // (c) Toggle between local and remote base path: true for remote, false for local
-  public static final boolean USE_REMOTE = true;
-  public static final String BASE_PATH = USE_REMOTE ? REMOTE_BASE_PATH : LOCAL_BASE_PATH;
+  public static final String BASE_PATH = "http://" + HOST_IP + ":8080/Server_war";
 
   /** 2. Whether to note down latency for each post */
   public static final boolean RECORD_POSTS_IN_CSV = false;
@@ -29,9 +20,8 @@ public class UserConfig {
 }
 ```
 
-**1. Remote vs Local Server**
-- If the user runs the server locally, set `USE_REMOTE` to `false`.
-- If the user runs the server on EC2, create a `.env` file in the `Client` project root directory and add `MY_EC2_IP=<Your EC2 public IP address>` (e.g., `MY_EC2_IP=35.164.156.188`). The `Dotenv` dependency will retrieve this while compiling.
+**1. Remote Server**
+- Create a `.env` file in the `Client` project root directory and add `MY_EC2_IP=<Your EC2 public IP address>` (e.g., `MY_EC2_IP=35.164.156.188`). The `Dotenv` dependency will retrieve this while compiling.
 
 **2. Client 1 vs Client 2**
 - To run as **Client 1** without CSV logging, set `RECORD_POSTS_IN_CSV` to `false`.
@@ -44,64 +34,147 @@ public class UserConfig {
 final int threadCount = (new Random().nextInt(3, 25)) * 10; // Change to fix number if needed
 ```
 
-
-
 # Design and Implementation
 
-On the server side, private helper functions are used to validate the URL, including checking its length, number format, etc. Further processing logic will be added as the project develops.
+The system contains 4 different components.
 
-![Server implementation](./Assets/Server_implementation.png)
+![Overall implementation](./Assets/Overall_design.png)
 
-The Client project structure is as follows. The `constants` package stores `Constants` as specified in the assignment, as well as `UserConfig`, which includes:
-1. A boolean value to toggle between talking to a local server or a remote server (IP address needed in `.env`).
-2. A boolean value to toggle whether to log individual events (i.e., **Client 2**) or not to log (i.e., **Client 1**).
-
-```
-qiuyingzhuo@Qiuyings-MacBook system % tree
-.
-├── Client.java
-├── constants
-│   ├── Constants.java
-│   └── UserConfig.java
-├── models
-│   ├── Event.java
-│   ├── EventLog.java
-│   └── PostWorkerParam.java
-└── runnables
-    ├── EventGenerator.java
-    ├── EventLogWorker.java
-    └── PostRequestWorker.java
-
-```
-
-
-The `models` package contains the data models facilitating the construction and execution of the runnable tasks, while the `runnables` package, categorized by their function, constitutes the main part of the design. Specifically:
-
-- The `EventGenerator` runnable is tasked with generating random `Event` instances, and put it in the event blocking queue.
-- The `EventLogWorker` runnable is responsible for retrieving `EventLog` instances from the log blocking queue, if any, and saving them to a CSV file. It will run only if the user chooses to write the records in a CSV file (i.e., in the case of **Client 2**).
-- Each `PostRequestWorker` shares the blocking queue with `EventGenerator` to retrieve `Event` instances, generate, and send HTTP requests via the `Swagger` agent. If CSV logging is enabled, it will also share the log blocking queue with `EventLogWorker`. It will generate `EventLog` instances and put them in the queue for further processing.
-
-![Client models and runnables](./Assets/Client_model_and_runnables.png)
-
-The `main` method in `Client` orchestrates everything, such as creating blocking queues as needed and passing them into the relevant runnables, submitting tasks (via `ExecutorService`), etc.
+## Client
+The Client is not changed from Assignment 1. As shown below, the `main` method in `Client` orchestrates everything, such as creating blocking queues as needed and passing them into the relevant runnables, submitting tasks (via `ExecutorService`), etc.
 
 ![Client main](./Assets/Client_main.png)
 
-Regarding concurrency, the following classes and data structures are used:
+## Server
 
-- There is a dedicated thread for `EventGenerator` to generate `Event` instances and a dedicated thread for `EventLogWorker` if the user chooses to write records into a CSV file. There is also a fixed-size thread pool managed by `ExecutorService` handling multiple post reqeust workers (they are runnables too).
-- We need to wait for all threads to finish in phase 1 before starting phase 2, and we want to know when phase 2 ends as well. `CountDownLatch` is used as a barrier between phases and to facilitate tracking these important moments.
-- For storing data to be processed, `LinkedBlockingQueue` is used because it is thread-safe when being consumed and produced by multiple threads at the same time.
-- Likewise, counters that need to be shared across multiple threads must be thread-safe. `AtomicInteger` is chosen for this purpose.
+The main class of server implementation is `SkiersServlet`, with the class diagram shown below:
 
-# Little's Law Estimation
+![Server implementation](./Assets/Server_implementation.png)
 
-If we set Phase 1 to 32 threads and Phase 2 to 150 threads. Using **Little's Law**, we can estimate the throughput using the formula `N = λW`, or `λ = N/W` where:
-* `N` is the long-term average number of customers in the system
-* `λ` is the long-term average effective arrival rate
-* `W` is the average time a customer spends in the system
+`SkiersServlet` class contains the following variables.
 
-Since the project is divided into two phases, and the thread count is less than Tomcat's configuration of 200 threads, `N` will be the number of client threads. Considering that most of the 200,000 tasks are processed in Phase 2, we assume `N = 150` and an average wait time of `W = 32 ms`. This gives us `λ = 4680`. 
+* `NUM_OF_URL_PARTS`: Defines the expected number of parts in the URL path (expected as 8 parts).
+* `NUM_CHANNEL`: Specifies the number of channels to initialize for handling RabbitMQ messaging.
+* `QUEUE_NAME`: Name of the RabbitMQ queue used for sending POST requests (queue name is "SkierServletPostQueue").
+* `channelPool`: A thread-safe queue (using `BlockingQueue`) to manage multiple RabbitMQ channels concurrently. The pool allows `NUM_CHANNEL` channels to be reused among threads to avoid repeatedly creating and closing channels.
+
+`SkiersServlet` class contains the following methods.
+
+* `init()`
+
+  The `init()` method is called once when the servlet is initialized. It sets up the RabbitMQ connection and populates the `channelPool` with a set number of pre-configured channels.
+
+  * Connection Setup:
+    
+    Creates a new `ConnectionFactory`, setting the host, port, username, and password for RabbitMQ.
+  
+    Establishes a new `connection` using the factory. If unsuccessful, it catches and logs any exceptions.
+  
+  * Channel Pool Setup:
+    
+    Creates `NUM_CHANNEL` channels from the established connection, configuring each to declare the `QUEUE_NAME` queue.
+    
+    Adds each channel to `channelPool`.
+
+* `isUrlValid()`
+
+  A helper method to validate the URL path. It checks:
+
+  * Path Presence and Structure:
+    
+    Ensures the URL path is not null or empty.
+    
+    Confirms that the path has exactly NUM_OF_URL_PARTS.
+
+  * Numeric Format Validation:
+    
+    Attempts to parse specific path segments (e.g., resortID and skierID) as integers.
+    
+  If any segment fails to parse, it returns 400 Bad Request.
+
+* `doGet()`
+
+  Handles GET requests.
+
+  * URL Validation: Validates the URL path by calling `isUrlValid()`.
+
+  * Response Handling:
+    
+    If valid, sets HTTP response status to `200 OK` and writes a success message to the response body.
+
+    If invalid, `isUrlValid()` will handle setting the appropriate response status and message.
+
+
+* `doPost()`
+
+  Handles POST requests.
+
+  1. URL Validation: Uses `isUrlValid()` to validate the URL path. If invalid, an error response is returned.
+
+  2. Request Body Parsing:
+
+      Reads the body of the POST request and converts it to a JSON object for further processing.
+
+  3. Additional JSON Data:
+    
+      Extracts additional information from the URL (i.e., `resortID`, `seasonID`, `dayID`, and `skierID`) and appends this data to the JSON object.
+
+  4. Publishing to RabbitMQ:
+
+      Retrieves a channel from `channelPool`.
+
+      Publishes the JSON object to the `QUEUE_NAME` queue.
+    
+      Adds the channel back to `channelPool` for future use.
+
+  5. Response Handling: Sets HTTP response status to 201 Created and sends a success message.
+
+
+## Consumer
+
+Running as a separate application in another EC2 instance, `Consumer` and `ConsumerRunnable` work together to consume messages from the RabbitMQ queue and process skier data. The `Consumer` class acts as the main entry point, setting up the RabbitMQ connection and threading, while `ConsumerRunnable` handles individual message processing. The following diagram shows the design and dependency of these class.
+
+![Consumer implementation](./Assets/Consumer_implementation.png)
+
+The `Consumer` class initializes the connection to RabbitMQ and creates a thread pool to execute ConsumerRunnable instances for processing messages concurrently.
+
+  * Constants:
+
+    `NUM_THREADS`: The number of consumer threads to be created for concurrent message processing.
+
+    `QUEUE_NAME`: Specifies the name of the queue from which messages will be consumed (`"SkierServletPostQueue"`).
+
+    `record`: A thread-safe, concurrent map (`ConcurrentHashMap`) used to store `JSONObject` messages for each skier, where skierID is the key, and a synchronized list of JSONObjects (the skier’s data) is the value.
+
+  * main(String[] args):
+
+    Connection Setup: Initializes `ConnectionFactory` with RabbitMQ credentials and settings.
+
+    Executor Service: Creates a custom `ExecutorService` for RabbitMQ and opens a connection to RabbitMQ.
+
+    Thread Pool for Consumers: Creates a fixed thread pool with `NUM_THREADS` and submits `ConsumerRunnable` tasks to the pool, each responsible for consuming messages from the queue.
+
+The `ConsumerRunnable` class is a `Runnable` implementation that handles message processing for a single thread. Each instance listens to the queue and processes messages as they arrive.
+
+  * Fields:
+
+    `queueName`: The queue name from which messages are consumed.
+
+    `connection`: The RabbitMQ Connection used to create a channel.
+
+  * `run()`:
+
+    Channel Setup: Creates a new Channel for consuming messages from the specified queue.
+
+    Message Handling (DeliverCallback):
+      
+      * Processes each message by converting it from bytes to a UTF-8 string, then parsing it into a JSONObject.
+
+      * Retrieves skierID from the JSON and stores the message in the record map. If the skierID already exists, it appends the message to the existing list; otherwise, it creates a new synchronized list.
+
+      * Acknowledges (ACKs) each message once processed.
+
+    CancelCallback: Defined but empty, serving as a placeholder for message cancel operations.
 
 # Testing Output Analysis
 
