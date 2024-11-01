@@ -20,12 +20,11 @@ public class Consumer {
 
     public static void main(String[] args) {
         ConnectionFactory connectionFactory = new ConnectionFactory();
-        connectionFactory.setHost("54.213.139.41");
+        connectionFactory.setHost("34.208.98.209");
         connectionFactory.setPort(5672);
         connectionFactory.setUsername("zqiuying");
         connectionFactory.setPassword("LoveCoding");
 
-        // 自定义一个ExecutorService供RabbitMQ使用
         ExecutorService rabbitMQExecutor = Executors.newFixedThreadPool(NUM_THREADS);
         Connection connection = null;
         try {

@@ -18,7 +18,7 @@ import java.util.concurrent.TimeoutException;
 public class SkierServlet extends HttpServlet {
 
   private static final int NUM_OF_URL_PARTS = 8;
-  private static final int NUM_CHANNEL = 10;
+  private static final int NUM_CHANNEL = 50;
   private static final String QUEUE_NAME = "SkierServletPostQueue";
 
   private BlockingQueue<Channel> channelPool;
@@ -28,7 +28,7 @@ public class SkierServlet extends HttpServlet {
     super.init();
 
     ConnectionFactory connectionFactory = new ConnectionFactory();
-    connectionFactory.setHost("54.213.139.41");
+    connectionFactory.setHost("34.208.98.209");
     connectionFactory.setPort(5672);
     connectionFactory.setUsername("zqiuying");
     connectionFactory.setPassword("LoveCoding");

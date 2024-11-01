@@ -1,60 +1,30 @@
-# How to Run the Client
+# URL to the Github Repository
 
-Similar to Assignment 1, users can find all the configuration parameters that need to be updated in `ski.resort.distributed.system.constants.UserConfig`, as detailed below.
-
-```java
-package ski.resort.distributed.system.constants;
-
-import io.github.cdimascio.dotenv.Dotenv;
-
-public class UserConfig {
-
-  /** 1. URL for API requests */
-  private static final String HOST_IP = Dotenv.load().get("MY_EC2_IP");
-  public static final String BASE_PATH = "http://" + HOST_IP + ":8080/Server_war";
-
-  /** 2. Whether to note down latency for each post */
-  public static final boolean RECORD_POSTS_IN_CSV = false;
-
-  public UserConfig() {}
-}
-```
-
-**1. Remote Server**
-- Create a `.env` file in the `Client` project root directory and add `MY_EC2_IP=<Your EC2 public IP address>` (e.g., `MY_EC2_IP=35.164.156.188`). The `Dotenv` dependency will retrieve this while compiling.
-
-**2. Client 1 vs Client 2**
-- To run as **Client 1** without CSV logging, set `RECORD_POSTS_IN_CSV` to `false`.
-- To run as **Client 2** with CSV logging being enabled, set `RECORD_POSTS_IN_CSV` to `true`.
-
-**3. Number of Threads in Phase 2**
-- Currently, the number of threads in phase 2 is set to a random value in `doPhaseTwo` method in `Client.java`.
-- If the user wants to test a specific number of threads, they are welcome to set a fixed number instead.
-```java
-final int threadCount = (new Random().nextInt(3, 25)) * 10; // Change to fix number if needed
-```
+Please visit [Github Repository](TODO).
 
 # Design and Implementation
 
-The system contains 4 different components.
+The system comprises four components: Client, Server, RabbitMQ, and Consumer. The Client runs on a local machine, while the Server, RabbitMQ, and Consumer each run on separate EC2 instances. The following diagram illustrates the overall data flow among the components (excluding the Client) running on different EC2 instances.
 
-![Overall implementation](./Assets/Overall_design.png)
+![Overall implementation](./Assets/OverallDesign.png)
+
+![All Instances](./Assets/AllInstances.png)
 
 ## Client
-The Client is not changed from Assignment 1. As shown below, the `main` method in `Client` orchestrates everything, such as creating blocking queues as needed and passing them into the relevant runnables, submitting tasks (via `ExecutorService`), etc.
+The Client is largely the same as Assignment 1. As shown below, the `main` method in `Client` orchestrates everything, such as creating blocking queues as needed and passing them into the relevant runnables, submitting tasks (via `ExecutorService`), etc.
 
-![Client main](./Assets/Client_main.png)
+![Client main](./Assets/Client.png)
 
 ## Server
 
 The main class of server implementation is `SkiersServlet`, with the class diagram shown below:
 
-![Server implementation](./Assets/Server_implementation.png)
+![Server implementation](./Assets/Server.png)
 
 `SkiersServlet` class contains the following variables.
 
 * `NUM_OF_URL_PARTS`: Defines the expected number of parts in the URL path (expected as 8 parts).
-* `NUM_CHANNEL`: Specifies the number of channels to initialize for handling RabbitMQ messaging.
+* `NUM_CHANNEL`: Specifies the number of channels to initialize for handling RabbitMQ messaging. The value is 50.
 * `QUEUE_NAME`: Name of the RabbitMQ queue used for sending POST requests (queue name is "SkierServletPostQueue").
 * `channelPool`: A thread-safe queue (using `BlockingQueue`) to manage multiple RabbitMQ channels concurrently. The pool allows `NUM_CHANNEL` channels to be reused among threads to avoid repeatedly creating and closing channels.
 
@@ -129,18 +99,21 @@ The main class of server implementation is `SkiersServlet`, with the class diagr
 
   5. Response Handling: Sets HTTP response status to 201 Created and sends a success message.
 
+## RabbitMQ
+
+RabbitMQ runs on a separate EC2 instance. By selecting `Ubuntu` as the OS image and following the [official documentation](https://www.rabbitmq.com/docs/install-debian#install-packages), `rabbitmq-server` is set up on the EC2 instance with the username `zqiuying` and the password `LoveCoding`. Lastly, the EC2 instances that run `Server` and `Consumer`are allowed to connect to RabbitMQ by adding their IPs to the `inbound rules`.
 
 ## Consumer
 
 Running as a separate application in another EC2 instance, `Consumer` and `ConsumerRunnable` work together to consume messages from the RabbitMQ queue and process skier data. The `Consumer` class acts as the main entry point, setting up the RabbitMQ connection and threading, while `ConsumerRunnable` handles individual message processing. The following diagram shows the design and dependency of these class.
 
-![Consumer implementation](./Assets/Consumer_implementation.png)
+![Consumer implementation](./Assets/Consumer.png)
 
 The `Consumer` class initializes the connection to RabbitMQ and creates a thread pool to execute ConsumerRunnable instances for processing messages concurrently.
 
   * Constants:
 
-    `NUM_THREADS`: The number of consumer threads to be created for concurrent message processing.
+    `NUM_THREADS`: The number of consumer threads to be created for concurrent message processing. The value is `10`.
 
     `QUEUE_NAME`: Specifies the name of the queue from which messages will be consumed (`"SkierServletPostQueue"`).
 
@@ -176,44 +149,46 @@ The `ConsumerRunnable` class is a `Runnable` implementation that handles message
 
     CancelCallback: Defined but empty, serving as a placeholder for message cancel operations.
 
+After generating the `.jar file`, upload it to a separate EC2 instance and execute it there. To verify, a log message is printed during the testing phase.
+
+![Consumer Log](./Assets/ConsumerLog.png)
+
+# Load Balancing
+
+To increase throughput, we deployed two EC2 instances for servlets and configured an AWS Application Load Balancer to route traffic between them. The load balancer listens for HTTP requests on port 8080 and forwards these requests to a target group containing the two instances. Ensure that the security group for the load balancer has permissions to send requests to the EC2 instances for servlets.
+
+![Load Balancer](./Assets/LoadBalancer.png)
+
 # Testing Output Analysis
 
-If we set Phase 1 to 32 threads and Phase 2 to 150 threads:
+The tests are conducted using a single servlet and a load-balanced servlet cluster with varying thread counts on the Client side to determine the optimal throughput.
 
-Without logging individual latency into the CSV file (i.e., running as **Client 1**), we have the following output:
-![Testing_Remote_No_Log_32_150_3406](./Assets/Testing_Remote_No_Log_32_150_3406.png)
+## Single Servlet
 
-Using the same settings but recording latency for each request into the CSV file (running as **Client 2**), we have the following output:
-![Testing_Remote_Yes_Log_32_150_3284](./Assets/Testing_Remote_Yes_Log_32_150_3284.png)
+Tests were conducted using thread counts of `100`, `200`, and `300` on the Client side, with a focus on throughput during phase 2. The highest throughput achieved was `6871` with `200` threads, and the RabbitMQ queue length remained minimal.
 
-The difference in overall throughput for **Client 1** and **Client 2**, calculated as `1 - (3284 / 3406)`, is less than `5%`, which is within the specification described in the assignment.
+![Single Servlet Stats](./Assets/SI-200-2.png)
 
-Meanwhile, the throughput observed in Phase 2 (ranging from 44k to 46k in varoius tests) is **close to the Little's Law predictions**.
+![Single Servlet Queue](./Assets/SI-200-1.png)
 
-Other **statistics** are shown below:
-![Statistics](./Assets/Statistics.png)
+## Load-balanced Servlet Cluster
 
-The graph below shows the **throughput over time**, which aligns with the test settings and observed results. Initially, with 32 threads, each sending 1,000 requests, the throughput ranges from 1.3k to 1.5k requests/second. Later, when the thread count increases to 150 threads, each sending 1,120 requests, the throughput fluctuates between 3.0k and 7.0k requests/second, overally reflecting **increased concurrency**.
+Tests were conducted using thread counts of `150`, `300`, `450`, `600`, `750` and `800` on the Client side, with a focus on throughput during phase 2. The highest throughput achieved was `10970` with `600` threads, and the RabbitMQ queue length remained minimal.
 
-![Throughput over time](./Assets/Throughput_over_time.png)
+![LB Cluster Stats](./Assets/LB-600-2.png)
 
+![LB Cluster Queue](./Assets/LB-600-1.png)
 
-# Appendix
+## Further Analysis
 
-TomCat JXM query: 200k requests being processed
-![TomCat JMX](./Assets/Testing_Remote_No_Log_32_220_4557_TomCat.png)
+### Throughput
 
-TomCat status: 200 threads
-![TomCat has 200 threads](./Assets/TomCat_200_Threads.png)
+A load-balanced cluster with two instances running the servlet shows a performance improvement of around `60%`, though not doubling, likely due to overhead between the Server and RabbitMQ.
 
-Postman: valid Get
-![Valid GET request](./Assets/GET_valid.png)
+In the single-servlet scenario, as the thread count increases to `300`, request retries begin to appear, indicating network overload and a rise in failed requests as the single servlet becomes insufficient.
 
-Postman: valid Post
-![Valid POST request](./Assets/POST_valid.png)
+In the load-balanced cluster scenario, we observe that when the thread count reaches higher values (e.g., `600`, `750`, and `800`), throughput levels off at approximately `10,500`, suggesting that at this thread count, network resources to the Server are fully utilized.
 
-Postman: invalid Post 1
-![Invalid POST request: Missing parameters](./Assets/POST_invalid_missing_params.png)
+### Queue Length
 
-Postman: invalid Post 2
-![Invalid POST request: Invalid number format](./Assets/POST_invalid_number_format.png)
+An interesting finding is that the queued messages in RabbitMQ remain minimal even with high Client thread counts. This suggests that the Consumer is effectively processing messages from the queue, as seen in the Publish/Deliver rates figure. It also implies that throughput could be further improved by increasing the publish rate, achievable by tuning `NUM_CHANNEL` and adjusting queue configurations on the Server side.

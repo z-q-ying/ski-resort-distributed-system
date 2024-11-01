@@ -37,7 +37,7 @@ public class ConsumerRunnable implements Runnable {
                     newSkierInfo.add(jsonObject);
                     Consumer.record.put(skierID, newSkierInfo);
                 }
-                System.out.println(Thread.currentThread().getId() + " - thread received " + jsonObject.toString());
+                // System.out.println(Thread.currentThread().getId() + " - thread received " + jsonObject.toString());
                 channel.basicAck(delivery.getEnvelope().getDeliveryTag(), false);
             };
             CancelCallback cancelCallback = (consumerTag) -> {};

@@ -2,10 +2,10 @@ package ski.resort.distributed.system.runnables;
 
 import ski.resort.distributed.system.models.EventLog;
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -46,7 +46,7 @@ public class EventLogWorker implements Runnable {
         System.out.println("Event log worker interrupted");
         break;
       } catch (NullPointerException e) {
-        System.out.println("Event log worker is null");
+        getAndPrintStats();
         break;
       }
     }
@@ -67,5 +67,47 @@ public class EventLogWorker implements Runnable {
         eventLog.getType(),
         eventLog.getEndTime() - eventLog.getStartTime(),
         eventLog.getResponseCode() == null ? "Null" : eventLog.getResponseCode().toString());
+  }
+
+  private void getAndPrintStats() {
+    List<Integer> latencies = new ArrayList<>();
+
+    try (BufferedReader br = new BufferedReader(new FileReader(this.filePath))) {
+      String line;
+      br.readLine(); // Skip the header
+      while ((line = br.readLine()) != null) {
+        String[] values = line.split(",");
+        latencies.add(Integer.parseInt(values[2])); // latency is the third field
+      }
+    } catch (IOException e) {
+      System.out.println("Error reading file: " + e.getMessage());
+      return;
+    }
+
+    if (latencies.isEmpty()) {
+      System.out.println("No latency data found.");
+      return;
+    }
+
+    Collections.sort(latencies);
+
+    // Calculating statistics
+    double mean = latencies.stream().mapToInt(Integer::intValue).average().orElse(0.0);
+    double median = getPercentile(latencies, 50);
+    double p95 = getPercentile(latencies, 95);
+    double p99 = getPercentile(latencies, 99);
+    int max = latencies.get(latencies.size() - 1);
+
+    // Printing results
+    System.out.printf("Mean: %.2f ms\n", mean);
+    System.out.printf("Median: %.2f ms\n", median);
+    System.out.printf("95th Percentile (p95): %.2f ms\n", p95);
+    System.out.printf("99th Percentile (p99): %.2f ms\n", p99);
+    System.out.printf("Max: %d ms\n", max);
+  }
+
+  private double getPercentile(List<Integer> latencies, int percentile) {
+    int index = (int) Math.ceil((percentile / 100.0) * latencies.size()) - 1;
+    return latencies.get(index);
   }
 }

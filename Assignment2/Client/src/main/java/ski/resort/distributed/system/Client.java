@@ -23,7 +23,6 @@ import static ski.resort.distributed.system.constants.Constants.TOTAL_POSTS;
 import static ski.resort.distributed.system.constants.UserConfig.BASE_PATH;
 import static ski.resort.distributed.system.constants.UserConfig.NUM_OF_POST_THREADS;
 import static ski.resort.distributed.system.constants.UserConfig.RECORD_POSTS_IN_CSV;
-import static ski.resort.distributed.system.constants.UserConfig.USE_REMOTE;
 
 /**
  * Orchestrates the creation of blocking queues and the execution of tasks by passing these queues
@@ -48,6 +47,11 @@ public class Client {
 
     // Start the lift event generator in a separate thread
     new Thread(new EventGenerator(TOTAL_POSTS, events)).start();
+    try {
+      Thread.sleep(5000); // For simplicity for now, to refactor in HW3
+    } catch (InterruptedException e) {
+      throw new RuntimeException(e);
+    }
 
     try {
       // Phase 1
@@ -83,8 +87,7 @@ public class Client {
 
     for (int i = 0; i < INITIAL_THREAD_COUNT; i++) {
       final PostWorkerParam params =
-          generateWorkerParameters(
-              initialLatch, successfulRequests, failedRequests, INITIAL_POSTS_PER_THREAD);
+          generateWorkerParameters(initialLatch, INITIAL_POSTS_PER_THREAD);
       executorService.submit(new PostRequestWorker(params));
     }
 
@@ -104,8 +107,7 @@ public class Client {
 
     while (remainingPosts > 0) {
       final int curPosts = Math.min(remainingPosts, postsPerThread);
-      final PostWorkerParam params =
-          generateWorkerParameters(dynamicLatch, successfulRequests, failedRequests, curPosts);
+      final PostWorkerParam params = generateWorkerParameters(dynamicLatch, curPosts);
       executorService.submit(new PostRequestWorker(params));
       remainingPosts -= curPosts;
     }
@@ -114,10 +116,7 @@ public class Client {
   }
 
   private static PostWorkerParam generateWorkerParameters(
-      final CountDownLatch latch,
-      final AtomicInteger successfulRequests,
-      final AtomicInteger failedRequests,
-      final Integer numOfRequests) {
+      final CountDownLatch latch, final Integer numOfRequests) {
     // Create an instance of ApiClient per thread to avoid any potential issues
     final ApiClient apiClient = new ApiClient();
     apiClient.setBasePath(path);
@@ -128,8 +127,8 @@ public class Client {
         .eventBlockingQueue(events)
         .logBlockingQueue(RECORD_POSTS_IN_CSV ? logs : null)
         .countDownLatch(latch)
-        .successfulRequests(successfulRequests)
-        .failedRequests(failedRequests)
+        .successfulRequests(Client.successfulRequests)
+        .failedRequests(Client.failedRequests)
         .skiersApi(skiersApi)
         .numOfRequests(numOfRequests)
         .build();
@@ -137,12 +136,10 @@ public class Client {
 
   private static void printTestInfo() {
     System.out.println(
-        new StringBuilder()
-            .append("\nCurrent test is sending requests to the ")
-            .append(USE_REMOTE ? "REMOTE" : "LOCAL")
-            .append(" server.\nThis test will ")
-            .append(RECORD_POSTS_IN_CSV ? "" : "NOT ")
-            .append("record CSV entries.\n"));
+        "\nCurrent test is sending requests to the "
+            + "remote server.\nThis test will "
+            + (RECORD_POSTS_IN_CSV ? "" : "NOT ")
+            + "record CSV entries.\n");
   }
 
   private static void printConfigMsg(final int threadCount, final int postsPerThread) {
@@ -152,16 +149,16 @@ public class Client {
 
   private static void printStat(
       final long startTime, final long endTime, final int successReq, final int failedReq) {
-    StringBuilder stringBuilder = new StringBuilder();
-    stringBuilder.append(String.format("%-18s %10d\n", "Post count:", successReq + failedReq));
-    stringBuilder.append(String.format("%-18s %10d posts\n", "Success:", successReq));
-    stringBuilder.append(String.format("%-18s %10d posts\n", "Failed:", failedReq));
 
     final long totalRunTime = endTime - startTime;
     final double throughput = (double) (successReq + failedReq) / (totalRunTime / 1000.0);
 
-    stringBuilder.append(String.format("%-18s %10d ms\n", "Run time:", totalRunTime));
-    stringBuilder.append(String.format("%-18s %10.0f req/second\n", "Throughput:", throughput));
+    String stringBuilder =
+        String.format("%-18s %10d\n", "Post count:", successReq + failedReq)
+            + String.format("%-18s %10d posts\n", "Success:", successReq)
+            + String.format("%-18s %10d posts\n", "Failed:", failedReq)
+            + String.format("%-18s %10d ms\n", "Run time:", totalRunTime)
+            + String.format("%-18s %10.0f req/second\n", "Throughput:", throughput);
     System.out.println(stringBuilder);
   }
 }
