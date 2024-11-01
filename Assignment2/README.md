@@ -1,6 +1,6 @@
 # URL to the Github Repository
 
-Please visit [Github Repository](TODO).
+Please visit [Github Repository]((https://github.com/z-q-ying/ski-resort-distributed-system/tree/main/Assignment2).
 
 # Design and Implementation
 
