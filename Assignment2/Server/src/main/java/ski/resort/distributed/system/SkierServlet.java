@@ -28,7 +28,7 @@ public class SkierServlet extends HttpServlet {
     super.init();
 
     ConnectionFactory connectionFactory = new ConnectionFactory();
-    connectionFactory.setHost("34.208.98.209");
+    connectionFactory.setHost("35.163.88.75");
     connectionFactory.setPort(5672);
     connectionFactory.setUsername("zqiuying");
     connectionFactory.setPassword("LoveCoding");
