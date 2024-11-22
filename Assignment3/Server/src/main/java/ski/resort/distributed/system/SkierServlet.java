@@ -28,13 +28,12 @@ public class SkierServlet extends HttpServlet {
     super.init();
 
     ConnectionFactory connectionFactory = new ConnectionFactory();
-    // connectionFactory.setHost("35.163.88.75");
-    connectionFactory.setHost("localhost");
-    // connectionFactory.setPort(5672);
-    // connectionFactory.setUsername("zqiuying");
-    // connectionFactory.setPassword("LoveCoding");
+    connectionFactory.setHost("172.31.12.171"); // "localhost" for local dev, only line needed
+    connectionFactory.setPort(5672);
+    connectionFactory.setUsername("zqiuying");
+    connectionFactory.setPassword("LoveCoding");
 
-    Connection connection = null;
+    Connection connection;
     try {
       connection = connectionFactory.newConnection();
     } catch (IOException | TimeoutException e) {
@@ -99,18 +98,35 @@ public class SkierServlet extends HttpServlet {
 
     Channel channel = null;
     try {
-      channel = channelPool.take();
+      channel = channelPool.take(); // Acquire channel from the pool
+      channel.confirmSelect(); // Enable confirm mode
+
+      // Publish message
+      channel.basicPublish("", QUEUE_NAME, null, jsonObject.toString().getBytes());
+
+      // Wait for RabbitMQ ACK
+      if (channel.waitForConfirms()) {
+        // Message successfully acknowledged
+        resp.setStatus(HttpServletResponse.SC_CREATED);
+        resp.getWriter().write("POST request has been successfully processed.");
+      } else {
+        // Message not acknowledged
+        resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        resp.getWriter().write("Failed to process POST request.");
+      }
     } catch (InterruptedException e) {
       e.printStackTrace();
       resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-      return;
+      resp.getWriter().write("Internal server error.");
+    } catch (IOException e) {
+      e.printStackTrace();
+      resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+      resp.getWriter().write("Failed to communicate with RabbitMQ.");
+    } finally {
+      if (channel != null) {
+        channelPool.add(channel); // Return channel to the pool
+      }
     }
-
-    channel.basicPublish("", QUEUE_NAME, null, jsonObject.toString().getBytes());
-    channelPool.add(channel);
-
-    resp.setStatus(HttpServletResponse.SC_CREATED);
-    resp.getWriter().write("POST request has been sent to rabbitmq.");
   }
 
   private boolean isUrlValid(final String urlPath, HttpServletResponse resp) {
@@ -130,8 +146,8 @@ public class SkierServlet extends HttpServlet {
 
       try {
         final int resortID = Integer.parseInt(pathParts[1]);
-        final String seasonID = pathParts[3];
-        final String dayID = pathParts[5];
+        final int seasonID = Integer.parseInt(pathParts[3]);
+        final int dayID = Integer.parseInt(pathParts[5]);
         final int skierID = Integer.parseInt(pathParts[7]);
       } catch (NumberFormatException e) {
         resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);

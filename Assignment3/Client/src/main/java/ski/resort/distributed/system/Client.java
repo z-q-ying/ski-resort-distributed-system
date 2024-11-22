@@ -48,7 +48,7 @@ public class Client {
     // Start the lift event generator in a separate thread
     new Thread(new EventGenerator(TOTAL_POSTS, events)).start();
     try {
-      Thread.sleep(5000); // For simplicity for now, to refactor in HW3
+      Thread.sleep(5000); // For simplicity for now, to refactor in HW4
     } catch (InterruptedException e) {
       throw new RuntimeException(e);
     }
@@ -154,8 +154,7 @@ public class Client {
     final double throughput = (double) (successReq + failedReq) / (totalRunTime / 1000.0);
 
     String stringBuilder =
-        String.format("%-18s %10d\n", "Post count:", successReq + failedReq)
-            + String.format("%-18s %10d posts\n", "Success:", successReq)
+        String.format("%-18s %10d posts\n", "Success:", successReq)
             + String.format("%-18s %10d posts\n", "Failed:", failedReq)
             + String.format("%-18s %10d ms\n", "Run time:", totalRunTime)
             + String.format("%-18s %10.0f req/second\n", "Throughput:", throughput);

@@ -99,11 +99,14 @@ public class EventLogWorker implements Runnable {
     int max = latencies.get(latencies.size() - 1);
 
     // Printing results
-    System.out.printf("Mean: %.2f ms\n", mean);
-    System.out.printf("Median: %.2f ms\n", median);
-    System.out.printf("95th Percentile (p95): %.2f ms\n", p95);
-    System.out.printf("99th Percentile (p99): %.2f ms\n", p99);
-    System.out.printf("Max: %d ms\n", max);
+    String statistics =
+        String.format("%-25s %10.2f ms\n", "Mean:", mean)
+            + String.format("%-25s %10.2f ms\n", "Median:", median)
+            + String.format("%-25s %10.2f ms\n", "95th Percentile (p95):", p95)
+            + String.format("%-25s %10.2f ms\n", "99th Percentile (p99):", p99)
+            + String.format("%-25s %10d ms\n", "Max:", max);
+    System.out.println("=============== Statistics ==============");
+    System.out.println(statistics);
   }
 
   private double getPercentile(List<Integer> latencies, int percentile) {
