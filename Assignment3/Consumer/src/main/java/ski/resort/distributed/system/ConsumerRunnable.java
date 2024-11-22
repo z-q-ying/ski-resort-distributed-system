@@ -5,12 +5,10 @@ import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.DeliverCallback;
 import org.json.JSONObject;
+import ski.resort.distributed.system.dal.LiftRideDao;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 
 public class ConsumerRunnable implements Runnable {
     private final String queueName;
@@ -30,19 +28,15 @@ public class ConsumerRunnable implements Runnable {
             DeliverCallback deliverCallback = (consumerTag, delivery) -> {
                 String message = new String(delivery.getBody(), StandardCharsets.UTF_8); // Bytes
                 JSONObject jsonObject = new JSONObject(message);
-                Integer skierID = jsonObject.getInt("skierID");
-                if (Consumer.record.containsKey(skierID)) {
-                    Consumer.record.get(skierID).add(jsonObject);
-                } else {
-                    List<JSONObject> newSkierInfo = Collections.synchronizedList(new ArrayList<>());
-                    newSkierInfo.add(jsonObject);
-                    Consumer.record.put(skierID, newSkierInfo);
-                }
-                System.out.println("!!!" + Thread.currentThread().getId() + " - thread received " + jsonObject);
+
+                // Add record to database
+                LiftRideDao liftRideDao = new LiftRideDao();
+                liftRideDao.createLiftRide(jsonObject);
                 channel.basicAck(delivery.getEnvelope().getDeliveryTag(), false);
             };
 
-            CancelCallback cancelCallback = (consumerTag) -> {};
+            CancelCallback cancelCallback = (consumerTag) -> {
+            };
 
             channel.basicConsume(this.queueName, false, deliverCallback, cancelCallback);
         } catch (IOException e) {

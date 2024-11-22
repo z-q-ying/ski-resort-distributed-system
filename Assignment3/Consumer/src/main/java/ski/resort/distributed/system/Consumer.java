@@ -2,36 +2,42 @@ package ski.resort.distributed.system;
 
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
-import org.json.JSONObject;
+import ski.resort.distributed.system.dal.DBCPDataSource;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.sql.SQLException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeoutException;
 
 public class Consumer {
-    private static final int NUM_THREADS = 10;
+    private static final int NUM_THREADS = 55;
     private static final String QUEUE_NAME = "SkierServletPostQueue";
 
-    public static final Map<Integer, List<JSONObject>> record = new ConcurrentHashMap<>();
-
     public static void main(String[] args) {
+        // Ensure database and table are created
+        DBCPDataSource.getDataSource();
+        try {
+            DBCPDataSource.createDatabaseAndTableIfNotExists();
+        } catch (SQLException e) {
+            System.err.println("Failed to ensure database and table exist: " + e.getMessage());
+            return;
+        }
+
+        // RabbitMQ set up
         ConnectionFactory connectionFactory = new ConnectionFactory();
-//        connectionFactory.setHost("35.163.88.75");
-//        connectionFactory.setPort(5672);
-//        connectionFactory.setUsername("zqiuying");
-//        connectionFactory.setPassword("LoveCoding");
-        connectionFactory.setHost("localhost");
+        connectionFactory.setHost("172.31.12.171"); // "localhost" for local dev, only line needed
+        connectionFactory.setPort(5672);
+        connectionFactory.setUsername("zqiuying");
+        connectionFactory.setPassword("LoveCoding");
 
         ExecutorService rabbitMQExecutor = Executors.newFixedThreadPool(NUM_THREADS);
-        Connection connection = null;
+        Connection connection;
         try {
             connection = connectionFactory.newConnection(rabbitMQExecutor);
         } catch (IOException | TimeoutException e) {
-            e.printStackTrace();
+            System.err.println("Error establishing connection to RabbitMQ: " + e.getMessage());
+            return;
         }
 
         ExecutorService pool = Executors.newFixedThreadPool(NUM_THREADS);
