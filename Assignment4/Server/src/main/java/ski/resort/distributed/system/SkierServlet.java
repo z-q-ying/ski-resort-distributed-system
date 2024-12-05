@@ -2,6 +2,8 @@ package ski.resort.distributed.system;
 
 import com.rabbitmq.client.*;
 import org.json.JSONObject;
+import ski.resort.distributed.system.dal.SkierDayVerticalDao;
+import ski.resort.distributed.system.dal.SkierResortTotalsDao;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -14,11 +16,15 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeoutException;
 
+import static ski.resort.distributed.system.utils.Constants.DOTENV;
+
 @WebServlet(value = "/skiers/*")
 public class SkierServlet extends HttpServlet {
 
-  private static final int NUM_OF_URL_PARTS = 8;
+  private static final int NUM_OF_URL_PARTS_A = 8;
+  private static final int NUM_OF_URL_PARTS_B = 5;
   private static final int NUM_CHANNEL = 50;
+  private static final int DEFAULT_SEASON = 2024;
   private static final String QUEUE_NAME = "SkierServletPostQueue";
 
   private BlockingQueue<Channel> channelPool;
@@ -27,43 +33,50 @@ public class SkierServlet extends HttpServlet {
   public void init() throws ServletException {
     super.init();
 
-    ConnectionFactory connectionFactory = new ConnectionFactory();
-    connectionFactory.setHost("172.31.12.171"); // "localhost" for local dev, only line needed
-    connectionFactory.setPort(5672);
-    connectionFactory.setUsername("zqiuying");
-    connectionFactory.setPassword("LoveCoding");
-
-    Connection connection;
-    try {
-      connection = connectionFactory.newConnection();
-    } catch (IOException | TimeoutException e) {
-      e.printStackTrace();
-      return;
-    }
-
-    // channelPool setup.
-    channelPool = new LinkedBlockingQueue<>();
-    for (int i = 0; i < NUM_CHANNEL; i++) {
-      try {
-        Channel newChannel = connection.createChannel();
-        newChannel.queueDeclare(QUEUE_NAME, false, false, false, null);
-        channelPool.add(newChannel);
-      } catch (IOException e) {
-        e.printStackTrace();
-      }
-    }
+    // set up RabbitMQ connections
+    setUpRabbitMQConnectionPool();
   }
 
   @Override
   protected void doGet(HttpServletRequest req, HttpServletResponse res)
       throws ServletException, IOException {
-    res.setContentType("text/plain");
+    res.setContentType("application/json");
 
     final String urlPath = req.getPathInfo();
-    if (!isUrlValid(urlPath, res)) return;
+    final String[] pathParts = urlPath.split("/");
 
-    res.setStatus(HttpServletResponse.SC_OK);
-    res.getWriter().write("GET request successfully processed!");
+    if (pathParts.length == NUM_OF_URL_PARTS_A) {
+      // GET /skiers/{resortID}/seasons/{seasonID}/days/{dayID}/skiers/{skierID}
+      if (!isValidSkierLongUrl(urlPath, res)) return;
+
+      final int resortID = Integer.parseInt(pathParts[1]);
+      final int seasonID = Integer.parseInt(pathParts[3]);
+      final int dayID = Integer.parseInt(pathParts[5]);
+      final int skierID = Integer.parseInt(pathParts[7]);
+
+      final SkierDayVerticalDao skierDayVerticalDao = new SkierDayVerticalDao();
+      final int tv = skierDayVerticalDao.getTotalVertical(resortID, seasonID, dayID, skierID);
+      final String msg = new JSONObject().put("totalVertical", tv).toString();
+
+      res.setStatus(HttpServletResponse.SC_OK);
+      res.getWriter().write(msg);
+
+    } else if (pathParts.length == NUM_OF_URL_PARTS_B) {
+      // GET /skiers/{skierID}/resorts/{resortID}/vertical
+      if (!isValidSkierShortUrl(urlPath, res)) return;
+      final int skierID = Integer.parseInt(pathParts[1]);
+      final int resortID = Integer.parseInt(pathParts[3]);
+
+      SkierResortTotalsDao skierResortTotalsDao = new SkierResortTotalsDao();
+      final int tv = skierResortTotalsDao.getTotalVertical(skierID, resortID, DEFAULT_SEASON);
+      final String msg = new JSONObject().put("totalVertical", tv).toString();
+
+      res.setStatus(HttpServletResponse.SC_OK);
+      res.getWriter().write(msg);
+    } else {
+      res.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+      res.getWriter().write("Invalid URL format");
+    }
   }
 
   @Override
@@ -72,7 +85,7 @@ public class SkierServlet extends HttpServlet {
     resp.setContentType("application/json"); // According to the API spec
 
     final String urlPath = req.getPathInfo();
-    if (!isUrlValid(urlPath, resp)) return;
+    if (!isValidSkierLongUrl(urlPath, resp)) return;
 
     // Parse and convert the req info into string for further JSON processing.
     StringBuilder jsonBuffer = new StringBuilder();
@@ -129,7 +142,36 @@ public class SkierServlet extends HttpServlet {
     }
   }
 
-  private boolean isUrlValid(final String urlPath, HttpServletResponse resp) {
+  private void setUpRabbitMQConnectionPool() {
+    // init RabbitMQ connections
+    ConnectionFactory connectionFactory = new ConnectionFactory();
+    connectionFactory.setHost(DOTENV.get("RMQ_HOST"));
+    connectionFactory.setPort(Integer.parseInt(DOTENV.get("RMQ_PORT")));
+    connectionFactory.setUsername(DOTENV.get("RMQ_USER"));
+    connectionFactory.setPassword(DOTENV.get("RMQ_PW"));
+
+    Connection connection;
+    try {
+      connection = connectionFactory.newConnection();
+    } catch (IOException | TimeoutException e) {
+      e.printStackTrace();
+      return;
+    }
+
+    // channelPool setup.
+    channelPool = new LinkedBlockingQueue<>();
+    for (int i = 0; i < NUM_CHANNEL; i++) {
+      try {
+        Channel newChannel = connection.createChannel();
+        newChannel.queueDeclare(QUEUE_NAME, false, false, false, null);
+        channelPool.add(newChannel);
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
+  }
+
+  private boolean isValidSkierLongUrl(final String urlPath, HttpServletResponse resp) {
     try {
       if (urlPath == null || urlPath.isEmpty()) {
         resp.setStatus(HttpServletResponse.SC_NOT_FOUND);
@@ -138,7 +180,7 @@ public class SkierServlet extends HttpServlet {
       }
 
       String[] pathParts = urlPath.split("/");
-      if (pathParts.length != NUM_OF_URL_PARTS) {
+      if (pathParts.length != NUM_OF_URL_PARTS_A) {
         resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
         resp.getWriter().write("Invalid URL format");
         return false;
@@ -149,6 +191,23 @@ public class SkierServlet extends HttpServlet {
         final int seasonID = Integer.parseInt(pathParts[3]);
         final int dayID = Integer.parseInt(pathParts[5]);
         final int skierID = Integer.parseInt(pathParts[7]);
+      } catch (NumberFormatException e) {
+        resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        resp.getWriter().write("Invalid number format in path parameters");
+        return false;
+      }
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+    return true;
+  }
+
+  private boolean isValidSkierShortUrl(final String urlPath, HttpServletResponse resp) {
+    try {
+      String[] pathParts = urlPath.split("/");
+      try {
+        final int skierID = Integer.parseInt(pathParts[1]);
+        final int resortID = Integer.parseInt(pathParts[3]);
       } catch (NumberFormatException e) {
         resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
         resp.getWriter().write("Invalid number format in path parameters");
