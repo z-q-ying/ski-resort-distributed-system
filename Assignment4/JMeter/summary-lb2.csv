@@ -1,0 +1,5 @@
+Label,# Samples,Average,Min,Max,Std. Dev.,Error %,Throughput,Received KB/sec,Sent KB/sec,Avg. Bytes
+getSkierResortTotals,64000,84,17,323,27.66,0.000%,1249.24362,205.96,253.74,168.8
+getResortSkiersDay,64000,84,17,326,27.53,0.000%,1250.21977,205.11,258.96,168.0
+getSkierDayVertical,64000,84,17,317,27.55,0.000%,1255.73912,206.41,267.32,168.3
+TOTAL,192000,84,17,326,27.58,0.000%,3747.14573,616.16,778.31,168.4
